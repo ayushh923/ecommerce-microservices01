@@ -3,40 +3,56 @@ package com.hoangtien2k3.userservice.security.userprinciple;
 import com.hoangtien2k3.userservice.exception.wrapper.EmailOrUsernameNotFoundException;
 import com.hoangtien2k3.userservice.model.entity.User;
 import com.hoangtien2k3.userservice.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.transaction.Transactional;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
 
-import javax.transaction.Transactional;
-
 @Service
 public class UserDetailService implements UserDetailsService {
 
-    @Autowired
-    UserRepository userRepository;
+    private final UserRepository userRepository;
+
+    public UserDetailService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
 
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String username) {
+
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new EmailOrUsernameNotFoundException("Email or Username does not exist, please try again: " + username));
+                .orElseThrow(() ->
+                        new EmailOrUsernameNotFoundException(
+                                "Email or Username does not exist: " + username
+                        )
+                );
 
         return UserPrinciple.build(user);
     }
 
     @Transactional
     public UserDetails loadUserByEmail(String email) {
+
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new EmailOrUsernameNotFoundException("Email or Username does not exist, please try again: " + email));
+                .orElseThrow(() ->
+                        new EmailOrUsernameNotFoundException(
+                                "Email does not exist: " + email
+                        )
+                );
 
         return UserPrinciple.build(user);
     }
 
     @Transactional
     public UserDetails loadUserByPhone(String phone) {
-        User user = userRepository.findByEmail(phone)
-                .orElseThrow(() -> new EmailOrUsernameNotFoundException("User not found, phone and password: " + phone));
+
+        User user = userRepository.findByPhone(phone)
+                .orElseThrow(() ->
+                        new EmailOrUsernameNotFoundException(
+                                "Phone number not found: " + phone
+                        )
+                );
 
         return UserPrinciple.build(user);
     }
