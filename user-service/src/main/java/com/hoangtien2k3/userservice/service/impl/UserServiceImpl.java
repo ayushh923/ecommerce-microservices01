@@ -15,6 +15,7 @@ import com.hoangtien2k3.userservice.security.userprinciple.UserDetailService;
 import com.hoangtien2k3.userservice.security.userprinciple.UserPrinciple;
 import com.hoangtien2k3.userservice.service.RoleService;
 import com.hoangtien2k3.userservice.service.UserService;
+
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,11 +28,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import javax.transaction.Transactional;
+import jakarta.transaction.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -39,6 +41,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class UserServiceImpl implements UserService {
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
@@ -46,7 +49,8 @@ public class UserServiceImpl implements UserService {
     private final ModelMapper modelMapper;
     private final RoleService roleService;
 
-    Gson gson = new Gson(); // google.code.gson
+    Gson gson = new Gson();
+
     @Autowired
     EventProducer eventProducer;
 
@@ -58,11 +62,12 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     public UserServiceImpl(UserRepository userRepository,
-            PasswordEncoder passwordEncoder,
-            JwtProvider jwtProvider,
-            UserDetailService userDetailsService,
-            ModelMapper modelMapper,
-            RoleService roleService) {
+                           PasswordEncoder passwordEncoder,
+                           JwtProvider jwtProvider,
+                           UserDetailService userDetailsService,
+                           ModelMapper modelMapper,
+                           RoleService roleService) {
+
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtProvider = jwtProvider;
@@ -74,25 +79,23 @@ public class UserServiceImpl implements UserService {
     @Override
     public Mono<User> register(SignUp signUp) {
         return Mono.fromCallable(() -> {
-            if (existsByUsername(signUp.getUsername())) {
-                throw new EmailOrUsernameNotFoundException(
-                        "The username " + signUp.getUsername() + " is existed, please try again.");
-            }
-            if (existsByEmail(signUp.getEmail())) {
-                throw new EmailOrUsernameNotFoundException(
-                        "The email " + signUp.getEmail() + " is existed, please try again.");
-            }
-            if (existsByPhoneNumber(signUp.getPhone())) {
-                throw new PhoneNumberNotFoundException(
-                        "The phone number " + signUp.getPhone() + " is existed, please try again.");
-            }
+
+            if (existsByUsername(signUp.getUsername()))
+                throw new EmailOrUsernameNotFoundException("Username exists: " + signUp.getUsername());
+
+            if (existsByEmail(signUp.getEmail()))
+                throw new EmailOrUsernameNotFoundException("Email exists: " + signUp.getEmail());
+
+            if (existsByPhoneNumber(signUp.getPhone()))
+                throw new PhoneNumberNotFoundException("Phone exists: " + signUp.getPhone());
 
             User user = modelMapper.map(signUp, User.class);
             user.setPassword(passwordEncoder.encode(signUp.getPassword()));
+
             user.setRoles(signUp.getRoles()
                     .stream()
                     .map(role -> roleService.findByName(mapToRoleName(role))
-                            .orElseThrow(() -> new RuntimeException("Role not found in the database.")))
+                            .orElseThrow(() -> new RuntimeException("Role not found")))
                     .collect(Collectors.toSet()));
 
             return userRepository.save(user);
@@ -111,83 +114,60 @@ public class UserServiceImpl implements UserService {
     @Override
     public Mono<JwtResponseMessage> login(Login signInForm) {
         return Mono.fromCallable(() -> {
+
             String usernameOrEmail = signInForm.getUsername();
             boolean isEmail = usernameOrEmail.contains("@gmail.com");
 
-            UserDetails userDetails;
-            if (isEmail) {
-                userDetails = userDetailsService.loadUserByEmail(usernameOrEmail);
-            } else {
-                userDetails = userDetailsService.loadUserByUsername(usernameOrEmail);
-            }
+            UserDetails userDetails = isEmail
+                    ? userDetailsService.loadUserByEmail(usernameOrEmail)
+                    : userDetailsService.loadUserByUsername(usernameOrEmail);
 
-            // check username
-            if (userDetails == null) {
-                throw new UserNotFoundException("User not found");
-            }
-
-            // Check password
-            if (!passwordEncoder.matches(signInForm.getPassword(), userDetails.getPassword())) {
+            if (!passwordEncoder.matches(signInForm.getPassword(), userDetails.getPassword()))
                 throw new PasswordNotFoundException("Incorrect password");
-            }
 
             Authentication authentication = new UsernamePasswordAuthenticationToken(
-                    userDetails,
-                    signInForm.getPassword(),
-                    userDetails.getAuthorities());
+                    userDetails, signInForm.getPassword(), userDetails.getAuthorities());
+
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             String accessToken = jwtProvider.createToken(authentication);
             String refreshToken = jwtProvider.createRefreshToken(authentication);
 
-            UserPrinciple userPrinciple = (UserPrinciple) userDetails;
+            UserPrinciple user = (UserPrinciple) userDetails;
 
             return JwtResponseMessage.builder()
                     .accessToken(accessToken)
                     .refreshToken(refreshToken)
                     .information(InformationMessage.builder()
-                            .id(userPrinciple.id())
-                            .fullname(userPrinciple.fullname())
-                            .username(userPrinciple.username())
-                            .email(userPrinciple.email())
-                            .phone(userPrinciple.phone())
-                            .gender(userPrinciple.gender())
-                            .avatar(userPrinciple.avatar())
-                            .roles(userPrinciple.roles())
+                            .id(user.id())
+                            .fullname(user.fullname())
+                            .username(user.username())
+                            .email(user.email())
+                            .phone(user.phone())
+                            .gender(user.gender())
+                            .avatar(user.avatar())
+                            .roles(user.roles())
                             .build())
                     .build();
-        }).subscribeOn(Schedulers.boundedElastic()).onErrorResume(Mono::error);
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     @Override
     public Mono<Void> logout() {
         return Mono.fromRunnable(() -> {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-            SecurityContextHolder.getContext().setAuthentication(null);
-
-            String currentToken = getCurrentToken();
-
-            if (authentication != null && authentication.isAuthenticated()) {
-                // Invalidate the current token by reducing its expiration time
-                String updatedToken = jwtProvider.reduceTokenExpiration(currentToken);
-            }
-
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             SecurityContextHolder.clearContext();
+            if (auth != null && auth.isAuthenticated()) {
+                String token = getCurrentToken();
+                if (token != null) jwtProvider.reduceTokenExpiration(token);
+            }
         }).subscribeOn(Schedulers.boundedElastic()).then();
     }
 
     private String getCurrentToken() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication != null && authentication.isAuthenticated()) {
-            Object credentials = authentication.getCredentials();
-
-            if (credentials instanceof String) {
-                return (String) credentials;
-            }
-        }
-
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getCredentials() instanceof String)
+            return (String) auth.getCredentials();
         return null;
     }
 
@@ -196,7 +176,7 @@ public class UserServiceImpl implements UserService {
     public Mono<User> update(Long id, SignUp updateDTO) {
         return Mono.fromCallable(() -> {
             User existingUser = userRepository.findById(id)
-                    .orElseThrow(() -> new UserNotFoundException("User not found userId: " + id + " for update"));
+                    .orElseThrow(() -> new UserNotFoundException("User not found: " + id));
 
             modelMapper.map(updateDTO, existingUser);
             existingUser.setPassword(passwordEncoder.encode(updateDTO.getPassword()));
@@ -209,31 +189,30 @@ public class UserServiceImpl implements UserService {
     @Override
     public Mono<String> changePassword(ChangePasswordRequest request) {
         return Mono.fromCallable(() -> {
-            UserDetails userDetails = getCurrentUserDetails();
-            String username = userDetails.getUsername();
 
-            User existingUser = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new UserNotFoundException("User not found with username " + username));
+            UserDetails loggedIn = getCurrentUserDetails();
+            String username = loggedIn.getUsername();
 
-            if (passwordEncoder.matches(request.getOldPassword(), userDetails.getPassword())) {
-                if (validateNewPassword(request.getNewPassword(), request.getConfirmPassword())) {
-                    existingUser.setPassword(passwordEncoder.encode(request.getNewPassword()));
-                    userRepository.save(existingUser);
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new UserNotFoundException("User not found " + username));
 
-                    // send email through kafka client
-                    EmailDetails emailDetails = emailDetailsConfig(username);
-
-                    eventProducer.send(KafkaConstant.PROFILE_ONBOARDING_TOPIC, gson.toJson(emailDetails))
-                            .subscribeOn(Schedulers.boundedElastic())
-                            .subscribe();
-
-                    return "Password changed successfully";
-                }
-
-                return "Password changed failed.";
-            } else {
+            if (!passwordEncoder.matches(request.getOldPassword(), loggedIn.getPassword()))
                 throw new PasswordNotFoundException("Incorrect password");
-            }
+
+            if (!Objects.equals(request.getNewPassword(), request.getConfirmPassword()))
+                return "Password changed failed.";
+
+            user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            userRepository.save(user);
+
+            EmailDetails emailDetails = emailDetailsConfig(username);
+
+            eventProducer.send(KafkaConstant.PROFILE_ONBOARDING_TOPIC, gson.toJson(emailDetails))
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .subscribe();
+
+            return "Password changed successfully";
+
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -241,34 +220,27 @@ public class UserServiceImpl implements UserService {
         return EmailDetails.builder()
                 .recipient("hoangtien2k3dev@gmail.com")
                 .msgBody(textSendEmailChangePasswordSuccessfully(username))
-                .subject("Password Change Successful: "
-                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
-                .attachment("Please be careful, don't let this information leak")
+                .subject("Password Change Successful: " +
+                        LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
+                .attachment("Please keep this information secure.")
                 .build();
     }
 
     public String textSendEmailChangePasswordSuccessfully(String username) {
         return "Hey " + username + "!\n\n" +
-                "This is a confirmation that your password has been successfully changed.\n" +
-                " If you did not initiate this change, please contact our support team immediately.\n" +
-                "If you have any questions or concerns, feel free to reach out to us.\n\n" +
-                "Best regards:\n\n" +
-                "Contact: hoangtien2k3qx1@gmail.com\n" +
-                "Fanpage: https://hoangtien2k3qx1.github.io/";
+                "Your password has been successfully changed.\n" +
+                "If this wasn't you, please contact support immediately.\n\n" +
+                "Best regards,\nSupport Team";
     }
 
     private UserDetails getCurrentUserDetails() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.isAuthenticated()
-                && authentication.getPrincipal() instanceof UserDetails) {
-            return (UserDetails) authentication.getPrincipal();
-        } else {
-            throw new UserNotAuthenticatedException("User not authenticated.");
-        }
-    }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-    private boolean validateNewPassword(String newPassword, String confirmPassword) {
-        return Objects.equals(newPassword, confirmPassword);
+        if (auth != null && auth.isAuthenticated()
+                && auth.getPrincipal() instanceof UserDetails)
+            return (UserDetails) auth.getPrincipal();
+
+        throw new UserNotAuthenticatedException("User not authenticated.");
     }
 
     @Transactional
@@ -280,11 +252,11 @@ public class UserServiceImpl implements UserService {
                             try {
                                 userRepository.delete(user);
                             } catch (DataAccessException e) {
-                                throw new RuntimeException("Error deleting user with userId: " + id, e);
+                                throw new RuntimeException("Error deleting user: " + id, e);
                             }
                         },
                         () -> {
-                            throw new UserNotFoundException("User not found for userId: " + id);
+                            throw new UserNotFoundException("User not found: " + id);
                         }))
                 .subscribeOn(Schedulers.boundedElastic())
                 .then(Mono.just("User with id " + id + " deleted successfully."));
@@ -297,22 +269,24 @@ public class UserServiceImpl implements UserService {
                 .header("Refresh-Token", refreshToken)
                 .retrieve()
                 .onStatus(HttpStatus::is4xxClientError,
-                        clientResponse -> Mono.error(new IllegalArgumentException("Refresh token không hợp lệ")))
+                        response -> Mono.error(new IllegalArgumentException("Invalid refresh token")))
                 .bodyToMono(JwtResponseMessage.class)
-                .map(JwtResponseMessage::getAccessToken); // Sử dụng getAccessToken để lấy token từ JwtResponse
+                .map(JwtResponseMessage::getAccessToken);
     }
 
     @Override
     public Mono<User> findById(Long userId) {
-        return Mono.fromCallable(() -> userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException("User not found with userId: " + userId)))
+        return Mono.fromCallable(() ->
+                        userRepository.findById(userId)
+                                .orElseThrow(() -> new UserNotFoundException("User not found " + userId)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
     @Override
-    public Mono<User> findByUsername(String userName) {
-        return Mono.fromCallable(() -> userRepository.findByUsername(userName)
-                .orElseThrow(() -> new UserNotFoundException("User not found with userName: " + userName)))
+    public Mono<User> findByUsername(String username) {
+        return Mono.fromCallable(() ->
+                        userRepository.findByUsername(username)
+                                .orElseThrow(() -> new UserNotFoundException("User not found " + username)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -321,8 +295,8 @@ public class UserServiceImpl implements UserService {
         return Mono.fromCallable(() -> {
             Sort sort = Sort.by(Sort.Direction.fromString(sortOrder), sortBy);
             PageRequest pageRequest = PageRequest.of(page, size, sort);
-            Page<User> usersPage = userRepository.findAll(pageRequest);
-            return usersPage.map(user -> modelMapper.map(user, UserDto.class));
+            Page<User> users = userRepository.findAll(pageRequest);
+            return users.map(user -> modelMapper.map(user, UserDto.class));
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -337,5 +311,4 @@ public class UserServiceImpl implements UserService {
     public boolean existsByPhoneNumber(String phone) {
         return userRepository.existsByPhoneNumber(phone);
     }
-
 }
