@@ -1,11 +1,9 @@
 package com.hoangtien2k3.userservice.model.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
 import lombok.*;
-import org.hibernate.annotations.NaturalId;
-
-import javax.persistence.*;
-import javax.validation.constraints.*;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -15,11 +13,14 @@ import java.util.Set;
 @NoArgsConstructor
 @Builder
 @Entity
-@Table(name = "users", uniqueConstraints = {
-        @UniqueConstraint(name = "unique_username", columnNames = "userName"),
-        @UniqueConstraint(name = "unique_email", columnNames = "email"),
-        @UniqueConstraint(name = "unique_phone", columnNames = "phoneNumber")
-})
+@Table(
+        name = "users",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "unique_username", columnNames = "userName"),
+                @UniqueConstraint(name = "unique_email", columnNames = "email"),
+                @UniqueConstraint(name = "unique_phone", columnNames = "phoneNumber")
+        }
+)
 public class User {
 
     @Id
@@ -37,7 +38,6 @@ public class User {
     @Column(name = "userName")
     private String username;
 
-    @NaturalId
     @NotBlank
     @Size(max = 50)
     @Email(message = "Input must be in Email format")
@@ -54,21 +54,23 @@ public class User {
     @Column(name = "gender", nullable = false)
     private String gender;
 
-    @Pattern(regexp = "^\\+84[0-9]{9,10}$|^0[0-9]{9,10}$", message = "The phone number is not in the correct format")
-    @Size(min = 10, max = 11, message = "Phone number must be between 10 and 11 characters")
+    @Pattern(
+            regexp = "^\\+?[0-9]{10,15}$",
+            message = "Phone number format is invalid"
+    )
+    @Size(min = 10, max = 15, message = "Phone number must be between 10 and 15 digits")
     @Column(name = "phoneNumber", unique = true)
     private String phone;
 
-    @Pattern(regexp = "^(http|https)://.*$", message = "Avatar URL must be a valid HTTP or HTTPS URL")
     @Lob
     @Column(name = "imageUrl")
     private String avatar;
 
     @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(name = "user_role",
+    @JoinTable(
+            name = "user_role",
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<Role> roles = new HashSet<>();
-
 }
