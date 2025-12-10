@@ -71,29 +71,21 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- ✅ ADDED: Testcontainers PostgreSQL -->
+        <!-- Testcontainers PostgreSQL -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>postgresql</artifactId>
             <scope>test</scope>
         </dependency>
 
-        <!-- ✅ ADDED: Keycloak Testcontainer -->
-        <dependency>
-            <groupId>dasniko</groupId>
-            <artifactId>testcontainers-keycloak</artifactId>
-            <version>3.2.0</version>
-            <scope>test</scope>
-        </dependency>
-
-        <!-- ✅ ADDED: Spring Boot Testcontainers support -->
+        <!-- Spring Boot Testcontainers support -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
 
-        <!-- ✅ ADDED: REST Assured -->
+        <!-- REST Assured -->
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
