@@ -3,8 +3,7 @@ package com.hoangtien2k3.userservice.model.entity;
 import lombok.*;
 import lombok.experimental.Accessors;
 import org.hibernate.annotations.NaturalId;
-
-import javax.persistence.*;
+import jakarta.persistence.*;
 
 @Getter
 @Setter
