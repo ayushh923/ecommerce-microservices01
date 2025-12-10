@@ -11,7 +11,7 @@ import com.hoangtien2k3.userservice.service.RoleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import javax.transaction.Transactional;
+import jakarta.transaction.Transactional;
 import java.util.*;
 
 @Service
@@ -28,8 +28,10 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     public Optional<Role> findByName(RoleName name) {
-        return Optional.ofNullable(roleRepository.findByName(name)
-                .orElseThrow(() -> new RoleNotFoundException("Role Not Found with name: " + name)));
+        return Optional.ofNullable(
+                roleRepository.findByName(name)
+                        .orElseThrow(() -> new RoleNotFoundException("Role Not Found with name: " + name))
+        );
     }
 
     @Transactional
@@ -41,8 +43,7 @@ public class RoleServiceImpl implements RoleService {
         Role role = roleRepository.findByName(mapToRoleName(roleName))
                 .orElseThrow(() -> new RoleNotFoundException("Role not found in system: " + roleName));
 
-        if (user.getRoles().contains(role))
-            return false;
+        if (user.getRoles().contains(role)) return false;
 
         user.getRoles().add(role);
         userRepository.save(user);
@@ -69,16 +70,16 @@ public class RoleServiceImpl implements RoleService {
 
         List<String> roleNames = new ArrayList<>();
         user.getRoles().forEach(userRole -> roleNames.add(userRole.name().toString()));
+
         return roleNames;
     }
 
     private RoleName mapToRoleName(String roleName) {
         return switch (roleName) {
             case "ADMIN", "admin", "Admin" -> RoleName.ADMIN;
-            case "PM", "pm", "Pm" -> RoleName.PM;
-            case "USER", "user", "User" -> RoleName.USER;
+            case "PM", "pm", "Pm"         -> RoleName.PM;
+            case "USER", "user", "User"   -> RoleName.USER;
             default -> null;
         };
     }
-
 }
